@@ -365,3 +365,4 @@ FodyWeavers.xsd
 /.gitattributes
 /CD-tree-3.vcxproj
 /CD-tree-3.vcxproj.filters
+/raylib.dll
