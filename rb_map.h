@@ -1,4 +1,3 @@
-// rb_map.h
 #ifndef RB_MAP_H
 #define RB_MAP_H
 
