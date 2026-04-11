@@ -1,4 +1,3 @@
-// map.h
 #ifndef MAP_H
 #define MAP_H
 
@@ -8,10 +7,8 @@
 typedef int KeyType;
 typedef char* ValueType;
 
-// Функция для освобождения значения (используется внутри map)
 void map_free_value(ValueType val);
 
-// Структура с операциями для конкретной реализации map
 typedef struct MapOps {
     void* (*create)(void);
     void  (*destroy)(void* map);
@@ -21,5 +18,11 @@ typedef struct MapOps {
     void  (*traverse)(void* map, void (*visit)(KeyType, ValueType));
     size_t(*height)(void* map);
 } MapOps;
+
+typedef struct TreeImpl {
+    const MapOps* ops;
+    void (*draw)(void* map, int x, int y, int dx);
+    bool (*find_with_path)(void* map, KeyType key, KeyType* path_keys, int* path_len, int max_path);
+} TreeImpl;
 
 #endif
