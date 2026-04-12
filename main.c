@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define SCREEN_WIDTH 1512
 #define SCREEN_HEIGHT 982
@@ -28,6 +29,17 @@ typedef struct {
 TraverseEntry g_traverse_entries[MAX_TRAVERSE_LINES];
 int g_traverse_count = 0;
 
+// Тип уведомления
+typedef enum {
+    NOTIFY_NONE,
+    NOTIFY_INSERT_SUCCESS,
+    NOTIFY_INSERT_REPLACE,
+    NOTIFY_DELETE_SUCCESS,
+    NOTIFY_DELETE_NOT_FOUND,
+    NOTIFY_SEARCH_FOUND,
+    NOTIFY_SEARCH_NOT_FOUND
+} NotificationType;
+
 // Состояния ввода
 typedef enum {
     INPUT_IDLE,
@@ -43,21 +55,33 @@ typedef enum {
     MODE_TRAVERSE
 } ProgramMode;
 
+// Структура для хранения состояния одного дерева
 typedef struct {
-    const TreeImpl* impl;
     void* map;
-    char input[64];
-    bool show_input;
-    InputState input_state;
-    int insert_key;
+    int tree_offset_x;
+    int tree_offset_y;
     KeyType search_path[MAX_PATH];
     int search_path_len;
     bool search_result;
     ValueType found_value;
+} TreeState;
+
+typedef struct {
+    const TreeImpl* impls[3];        // реализации деревьев
+    TreeState states[3];             // состояния каждого дерева
+    int current_impl;                // текущий индекс
+    char input[64];
+    bool show_input;
+    InputState input_state;
+    int insert_key;
     ProgramMode mode;
     int traverse_scroll;
-    int tree_offset_x;  
-    int tree_offset_y;  
+
+    // Система уведомлений
+    NotificationType notification;
+    double notification_time;
+    int notification_key;
+    char notification_value[64];
 } AppState;
 
 static AppState state;
@@ -70,6 +94,30 @@ static char* safe_strdup(const char* s) {
     return p;
 }
 
+// Получить текущее дерево
+void* get_current_map(void) {
+    return state.states[state.current_impl].map;
+}
+
+// Получить текущую реализацию
+const TreeImpl* get_current_impl(void) {
+    return state.impls[state.current_impl];
+}
+
+// Показать уведомление
+void show_notification(NotificationType type, int key, const char* value) {
+    state.notification = type;
+    state.notification_time = GetTime();
+    state.notification_key = key;
+    if (value) {
+        strncpy(state.notification_value, value, 63);
+        state.notification_value[63] = '\0';
+    }
+    else {
+        state.notification_value[0] = '\0';
+    }
+}
+
 // Функция обратного вызова для обхода
 void traverse_callback(KeyType key, ValueType value) {
     if (g_traverse_count < MAX_TRAVERSE_LINES) {
@@ -80,26 +128,85 @@ void traverse_callback(KeyType key, ValueType value) {
     }
 }
 
-// Сброс состояния поиска
+// Сброс состояния поиска для текущего дерева
 void reset_search_state(void) {
-    state.search_path_len = 0;
-    state.search_result = false;
-    state.found_value = NULL;
+    TreeState* ts = &state.states[state.current_impl];
+    ts->search_path_len = 0;
+    ts->search_result = false;
+    ts->found_value = NULL;
     g_search_path_len = 0;
     g_search_found = false;
 }
 
+// Синхронизация глобальных переменных поиска с текущим деревом
+void sync_search_state(void) {
+    TreeState* ts = &state.states[state.current_impl];
+    memcpy(g_search_path, ts->search_path, ts->search_path_len * sizeof(KeyType));
+    g_search_path_len = ts->search_path_len;
+    g_search_found = ts->search_result;
+}
+
+// Отрисовка уведомления
+void draw_notification(void) {
+    if (state.notification == NOTIFY_NONE) return;
+
+    double current_time = GetTime();
+    if (current_time - state.notification_time > 3.0) {
+        state.notification = NOTIFY_NONE;
+        return;
+    }
+
+    const char* message = NULL;
+    Color msg_color = BLACK;
+
+    switch (state.notification) {
+    case NOTIFY_INSERT_SUCCESS:
+        message = TextFormat("Inserted: %d -> %s", state.notification_key, state.notification_value);
+        msg_color = DARKGREEN;
+        break;
+    case NOTIFY_INSERT_REPLACE:
+        message = TextFormat("Replaced: %d -> %s", state.notification_key, state.notification_value);
+        msg_color = DARKBLUE;
+        break;
+    case NOTIFY_DELETE_SUCCESS:
+        message = TextFormat("Deleted: %d", state.notification_key);
+        msg_color = DARKGREEN;
+        break;
+    case NOTIFY_DELETE_NOT_FOUND:
+        message = TextFormat("Key %d not found for deletion", state.notification_key);
+        msg_color = RED;
+        break;
+    case NOTIFY_SEARCH_FOUND:
+        message = TextFormat("Found: %d -> %s", state.notification_key, state.notification_value);
+        msg_color = DARKGREEN;
+        break;
+    case NOTIFY_SEARCH_NOT_FOUND:
+        message = TextFormat("Key %d not found", state.notification_key);
+        msg_color = RED;
+        break;
+    default:
+        break;
+    }
+
+    if (message) {
+        int text_width = MeasureText(message, 20);
+        int box_x = SCREEN_WIDTH / 2 - text_width / 2 - 20;
+        int box_y = SCREEN_HEIGHT - 100;
+
+        DrawRectangle(box_x, box_y, text_width + 40, 40, (Color) { 240, 240, 240, 230 });
+        DrawRectangleLines(box_x, box_y, text_width + 40, 40, msg_color);
+        DrawText(message, box_x + 20, box_y + 10, 20, msg_color);
+    }
+}
+
 // Отрисовка окна обхода
 void draw_traverse_window(void) {
-    // Заголовок
     DrawText("Tree Traversal (key: value)", 10, 10, 24, DARKBLUE);
     DrawText("Use mouse wheel or arrows to scroll", 10, 45, 18, DARKGRAY);
     DrawText("Press ENTER to return", 10, 70, 18, DARKGRAY);
 
-    // Разделительная линия
     DrawLine(10, 95, SCREEN_WIDTH - 10, 95, LIGHTGRAY);
 
-    // Отрисовка записей с учётом прокрутки
     int start_index = state.traverse_scroll;
     int max_visible = (SCREEN_HEIGHT - 130) / 25;
 
@@ -114,14 +221,12 @@ void draw_traverse_window(void) {
         DrawText(line, 20, 105 + i * 25, 20, DARKGRAY);
     }
 
-    // Информация о количестве записей
     DrawText(TextFormat("Total entries: %d", g_traverse_count), 10, SCREEN_HEIGHT - 30, 18, DARKGREEN);
 
-    // Полоса прокрутки
     if (g_traverse_count > max_visible) {
         float scroll_percent = (float)state.traverse_scroll / (g_traverse_count - max_visible);
         int scroll_bar_height = SCREEN_HEIGHT - 140;
-        int scroll_handle_y = 100 + (int)(scroll_percent * (float)scroll_bar_height);  
+        int scroll_handle_y = 100 + (int)(scroll_percent * (float)scroll_bar_height);
 
         DrawRectangle(SCREEN_WIDTH - 20, 100, 10, scroll_bar_height, LIGHTGRAY);
         DrawRectangle(SCREEN_WIDTH - 20, scroll_handle_y, 10, 50, GRAY);
@@ -129,18 +234,19 @@ void draw_traverse_window(void) {
 }
 
 void draw_search_path_info(void) {
+    TreeState* ts = &state.states[state.current_impl];
     char path_str[256] = "Path: ";
-    for (int i = 0; i < state.search_path_len; i++) {
+    for (int i = 0; i < ts->search_path_len; i++) {
         char tmp[16];
-        sprintf(tmp, "%d ", state.search_path[i]);
+        sprintf(tmp, "%d ", ts->search_path[i]);
         strcat(path_str, tmp);
     }
-    DrawText(path_str, 10, SCREEN_HEIGHT - 40, 20, state.search_result ? GREEN : RED);
-    if (state.search_result && state.found_value) {
-        DrawText(TextFormat("Found: %d -> %s", state.search_path[state.search_path_len - 1], state.found_value),
+    DrawText(path_str, 10, SCREEN_HEIGHT - 40, 20, ts->search_result ? GREEN : RED);
+    if (ts->search_result && ts->found_value) {
+        DrawText(TextFormat("Found: %d -> %s", ts->search_path[ts->search_path_len - 1], ts->found_value),
             10, SCREEN_HEIGHT - 70, 20, DARKGREEN);
     }
-    else if (!state.search_result) {
+    else if (!ts->search_result) {
         DrawText("Not found", 10, SCREEN_HEIGHT - 70, 20, RED);
     }
 }
@@ -150,72 +256,73 @@ int main(void) {
     SetTargetFPS(60);
     SetExitKey(0);
 
-    const TreeImpl* implementations[] = {
-        get_bst_tree_impl(),
-        get_btree_tree_impl(),
-        get_rb_tree_impl()
-    };
+    // Инициализация реализаций
+    state.impls[0] = get_bst_tree_impl();
+    state.impls[1] = get_btree_tree_impl();
+    state.impls[2] = get_rb_tree_impl();
     const char* impl_names[] = { "BST", "B-Tree", "RB-Tree" };
     const int impl_count = 3;
 
-    int current_impl = 0;
-    state.impl = implementations[current_impl];
-    state.map = state.impl->ops->create();
+    // Инициализация состояний всех деревьев
+    for (int i = 0; i < impl_count; i++) {
+        state.states[i].map = state.impls[i]->ops->create();
+        state.states[i].tree_offset_x = 0;
+        state.states[i].tree_offset_y = 0;
+        state.states[i].search_path_len = 0;
+        state.states[i].search_result = false;
+        state.states[i].found_value = NULL;
+    }
+
+    state.current_impl = 0;
     state.show_input = false;
     state.input_state = INPUT_IDLE;
-    state.search_path_len = 0;
-    state.search_result = false;
-    state.found_value = NULL;
     state.mode = MODE_MAIN;
     state.traverse_scroll = 0;
     state.input[0] = '\0';
-    state.tree_offset_x = 0;  
-    state.tree_offset_y = 0;  
+    state.notification = NOTIFY_NONE;
 
     Rectangle input_box = { 10, 240, 200, 30 };
 
     while (!WindowShouldClose()) {
-        // ========== ОБРАБОТКА ПЕРЕМЕЩЕНИЯ ДЕРЕВА (всегда, когда не ввод текста) ==========
+        TreeState* ts = &state.states[state.current_impl];
+        const TreeImpl* impl = state.impls[state.current_impl];
+
+        // ========== ОБРАБОТКА ПЕРЕМЕЩЕНИЯ ДЕРЕВА ==========
         if (state.mode == MODE_MAIN && !state.show_input) {
             int move_speed = 6;
-            if (IsKeyDown(KEY_LEFT)) state.tree_offset_x += move_speed;
-            if (IsKeyDown(KEY_RIGHT)) state.tree_offset_x -= move_speed;
-            if (IsKeyDown(KEY_UP)) state.tree_offset_y += move_speed;      
-            if (IsKeyDown(KEY_DOWN)) state.tree_offset_y -= move_speed;    
+            if (IsKeyDown(KEY_LEFT)) ts->tree_offset_x += move_speed;
+            if (IsKeyDown(KEY_RIGHT)) ts->tree_offset_x -= move_speed;
+            if (IsKeyDown(KEY_UP)) ts->tree_offset_y += move_speed;
+            if (IsKeyDown(KEY_DOWN)) ts->tree_offset_y -= move_speed;
 
-            // Сброс позиции по R
             if (IsKeyPressed(KEY_R)) {
-                state.tree_offset_x = 0;
-                state.tree_offset_y = 0;
+                ts->tree_offset_x = 0;
+                ts->tree_offset_y = 0;
             }
         }
 
         // ========== ОБРАБОТКА ESC ДЛЯ ЗАКРЫТИЯ ПРОГРАММЫ ==========
-        // ESC закрывает программу только в главном окне и когда нет активного ввода
         if (state.mode == MODE_MAIN && state.input_state == INPUT_IDLE) {
             if (IsKeyPressed(KEY_ESCAPE)) {
-                break;  // выход из главного цикла
+                break;
             }
         }
 
-        // ========== ОБРАБОТКА ВВОДА В ЗАВИСИМОСТИ ОТ РЕЖИМА ==========
+        // ========== ОБРАБОТКА ВВОДА ==========
         if (state.mode == MODE_MAIN) {
-            // Команды (только когда нет активного ввода)
             if (state.input_state == INPUT_IDLE) {
-                int old_impl = current_impl;
-                if (IsKeyPressed(KEY_ONE)) current_impl = 0;
-                if (IsKeyPressed(KEY_TWO) && impl_count > 1) current_impl = 1;
-                if (IsKeyPressed(KEY_THREE) && impl_count > 2) current_impl = 2;
-                if (IsKeyPressed(KEY_TAB)) current_impl = (current_impl + 1) % impl_count;
-                if (old_impl != current_impl) {
-                    state.impl->ops->destroy(state.map);
-                    state.impl = implementations[current_impl];
-                    state.map = state.impl->ops->create();
-                    reset_search_state();
+                int old_impl = state.current_impl;
+                if (IsKeyPressed(KEY_ONE)) state.current_impl = 0;
+                if (IsKeyPressed(KEY_TWO)) state.current_impl = 1;
+                if (IsKeyPressed(KEY_THREE)) state.current_impl = 2;
+                if (IsKeyPressed(KEY_TAB)) state.current_impl = (state.current_impl + 1) % impl_count;
+
+                if (old_impl != state.current_impl) {
+                    // При переключении синхронизируем глобальный путь поиска
+                    sync_search_state();
                     g_traverse_count = 0;
                 }
 
-                // Команды операций
                 if (IsKeyPressed(KEY_W)) {
                     state.input_state = INPUT_INSERT_KEY;
                     state.show_input = true;
@@ -235,7 +342,7 @@ int main(void) {
                 }
                 if (IsKeyPressed(KEY_T)) {
                     g_traverse_count = 0;
-                    state.impl->ops->traverse(state.map, traverse_callback);
+                    impl->ops->traverse(ts->map, traverse_callback);
                     state.mode = MODE_TRAVERSE;
                     state.traverse_scroll = 0;
                     reset_search_state();
@@ -263,12 +370,10 @@ int main(void) {
                     ch = GetCharPressed();
                 }
 
-                // Backspace
                 if (IsKeyPressed(KEY_BACKSPACE) && strlen(state.input) > 0) {
                     state.input[strlen(state.input) - 1] = '\0';
                 }
 
-                // Enter - завершение ввода
                 if (IsKeyPressed(KEY_ENTER) && strlen(state.input) > 0) {
                     switch (state.input_state) {
                     case INPUT_INSERT_KEY:
@@ -284,7 +389,19 @@ int main(void) {
                             sprintf(state.input, "value_%d", state.insert_key);
                             value = state.input;
                         }
-                        state.impl->ops->insert(state.map, state.insert_key, safe_strdup(value));
+
+                        ValueType old_value = impl->ops->find(ts->map, state.insert_key);
+                        bool existed = (old_value != NULL);
+
+                        impl->ops->insert(ts->map, state.insert_key, safe_strdup(value));
+
+                        if (existed) {
+                            show_notification(NOTIFY_INSERT_REPLACE, state.insert_key, value);
+                        }
+                        else {
+                            show_notification(NOTIFY_INSERT_SUCCESS, state.insert_key, value);
+                        }
+
                         state.input_state = INPUT_IDLE;
                         state.show_input = false;
                         state.input[0] = '\0';
@@ -294,7 +411,16 @@ int main(void) {
                     case INPUT_DELETE:
                     {
                         int num = atoi(state.input);
-                        state.impl->ops->erase(state.map, num);
+                        ValueType old_value = impl->ops->find(ts->map, num);
+
+                        if (old_value) {
+                            impl->ops->erase(ts->map, num);
+                            show_notification(NOTIFY_DELETE_SUCCESS, num, NULL);
+                        }
+                        else {
+                            show_notification(NOTIFY_DELETE_NOT_FOUND, num, NULL);
+                        }
+
                         state.input_state = INPUT_IDLE;
                         state.show_input = false;
                         state.input[0] = '\0';
@@ -304,12 +430,19 @@ int main(void) {
                     case INPUT_SEARCH:
                     {
                         int num = atoi(state.input);
-                        state.search_result = state.impl->find_with_path(state.map, num,
-                            state.search_path, &state.search_path_len, MAX_PATH);
-                        state.found_value = state.impl->ops->find(state.map, num);
-                        memcpy(g_search_path, state.search_path, state.search_path_len * sizeof(KeyType));
-                        g_search_path_len = state.search_path_len;
-                        g_search_found = state.search_result;
+                        ts->search_result = impl->find_with_path(ts->map, num,
+                            ts->search_path, &ts->search_path_len, MAX_PATH);
+                        ts->found_value = impl->ops->find(ts->map, num);
+
+                        sync_search_state();
+
+                        if (ts->search_result) {
+                            show_notification(NOTIFY_SEARCH_FOUND, num, ts->found_value);
+                        }
+                        else {
+                            show_notification(NOTIFY_SEARCH_NOT_FOUND, num, NULL);
+                        }
+
                         state.input_state = INPUT_IDLE;
                         state.show_input = false;
                         state.input[0] = '\0';
@@ -321,7 +454,6 @@ int main(void) {
                     }
                 }
 
-                // ESC - отмена ввода (НЕ закрывает программу)
                 if (IsKeyPressed(KEY_ESCAPE)) {
                     state.input_state = INPUT_IDLE;
                     state.show_input = false;
@@ -330,13 +462,10 @@ int main(void) {
             }
         }
         else if (state.mode == MODE_TRAVERSE) {
-            // Управление в режиме обхода
             if (IsKeyPressed(KEY_ENTER)) {
                 state.mode = MODE_MAIN;
             }
-            // ESC в режиме обхода игнорируется (ничего не делает)
 
-            // Прокрутка колесиком мыши
             int wheel = GetMouseWheelMove();
             if (wheel != 0) {
                 state.traverse_scroll -= wheel;
@@ -347,7 +476,6 @@ int main(void) {
                 if (state.traverse_scroll > max_scroll) state.traverse_scroll = max_scroll;
             }
 
-            // Прокрутка стрелками
             if (IsKeyDown(KEY_UP)) {
                 state.traverse_scroll--;
                 if (state.traverse_scroll < 0) state.traverse_scroll = 0;
@@ -368,16 +496,15 @@ int main(void) {
         if (state.mode == MODE_MAIN) {
             DrawText("Map Visualizer", 10, 10, 24, DARKBLUE);
             DrawText("1-BST  2-B-Tree  3-RB-Tree  (TAB to switch)", 10, 45, 20, DARKGRAY);
-            DrawText(TextFormat("Current: %s", impl_names[current_impl]), 10, 80, 20, DARKGREEN);
+            DrawText(TextFormat("Current: %s", impl_names[state.current_impl]), 10, 80, 20, DARKGREEN);
             DrawText("W - insert", 10, 115, 20, DARKGRAY);
             DrawText("D - delete", 10, 145, 20, DARKGRAY);
             DrawText("S - search", 10, 175, 20, DARKGRAY);
             DrawText("T - traverse", 10, 205, 20, DARKGRAY);
-            DrawText("Arrows - move tree", 10, 310, 20, DARKGRAY);        
-            DrawText("R - reset position", 10, 330, 20, DARKGRAY);       
+            DrawText("Arrows - move tree", 10, 310, 20, DARKGRAY);
+            DrawText("R - reset position", 10, 330, 20, DARKGRAY);
             DrawText("ESC - exit (when not typing)", 10, 350, 20, DARKGRAY);
 
-            // Статус операции
             if (state.input_state == INPUT_INSERT_KEY)
                 DrawText("INSERT: Enter key", 250, 115, 20, GREEN);
             else if (state.input_state == INPUT_INSERT_VALUE)
@@ -387,14 +514,12 @@ int main(void) {
             else if (state.input_state == INPUT_SEARCH)
                 DrawText("SEARCH: Enter key", 250, 175, 20, BLUE);
 
-            // Поле ввода
             if (state.show_input) {
                 DrawRectangleRec(input_box, LIGHTGRAY);
                 DrawRectangleLines((int)input_box.x, (int)input_box.y,
                     (int)input_box.width, (int)input_box.height, DARKBLUE);
                 DrawText(state.input, (int)input_box.x + 5, (int)input_box.y + 5, 20, BLACK);
 
-                // Подсказка
                 if (state.input_state == INPUT_INSERT_KEY ||
                     state.input_state == INPUT_DELETE ||
                     state.input_state == INPUT_SEARCH) {
@@ -408,17 +533,17 @@ int main(void) {
                 DrawText("Press W/D/S/T to operate", (int)input_box.x, (int)input_box.y - 10, 20, GRAY);
             }
 
-            size_t h = state.impl->ops->height(state.map);
+            size_t h = impl->ops->height(ts->map);
             DrawText(TextFormat("Height: %zu", h), SCREEN_WIDTH - 150, 10, 20, DARKGRAY);
 
-            // Отрисовка дерева с учётом смещения  ← ИЗМЕНЕНО
-            state.impl->draw(state.map, SCREEN_WIDTH / 2 + state.tree_offset_x,
-                150 + state.tree_offset_y, 300);
+            impl->draw(ts->map, SCREEN_WIDTH / 2 + ts->tree_offset_x,
+                150 + ts->tree_offset_y, 300);
 
-            // Вывод результатов поиска
-            if (state.search_path_len > 0) {
+            if (ts->search_path_len > 0) {
                 draw_search_path_info();
             }
+
+            draw_notification();
         }
         else if (state.mode == MODE_TRAVERSE) {
             draw_traverse_window();
@@ -427,7 +552,11 @@ int main(void) {
         EndDrawing();
     }
 
-    state.impl->ops->destroy(state.map);
+    // Очистка всех деревьев
+    for (int i = 0; i < impl_count; i++) {
+        state.impls[i]->ops->destroy(state.states[i].map);
+    }
+
     CloseWindow();
     return 0;
 }

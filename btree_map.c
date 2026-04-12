@@ -430,9 +430,8 @@ static void btree_traverse_node(BTreeNode* node, void (*visit)(KeyType, ValueTyp
     if (!node->leaf) btree_traverse_node(node->children[i], visit);
 }
 
-// Высота дерева
 static size_t btree_height_node(BTreeNode* node) {
-    if (!node) return 0;
+    if (!node || node->n == 0) return 0;  
     if (node->leaf) return 1;
     return 1 + btree_height_node(node->children[0]);
 }
@@ -539,7 +538,7 @@ static bool is_key_in_path(KeyType key, bool* is_found) {
 }
 
 static void btree_draw_node(BTreeNode* node, int x, int y, int dx) {
-    if (!node) return;
+    if (!node || node->n == 0) return;  
 
     int cell_width = 50;
     int cell_height = 40;
@@ -589,7 +588,7 @@ static void btree_draw_node(BTreeNode* node, int x, int y, int dx) {
         int child_start_x = x - total_width / 2 + dx / 2;
 
         for (int i = 0; i <= node->n; i++) {
-            if (node->children[i]) {
+            if (node->children[i] && node->children[i]->n > 0) {  // ← ДОБАВЛЕНА ПРОВЕРКА
                 int child_x = child_start_x + i * dx;
                 DrawLine(start_x + i * cell_width, y + cell_height / 2,
                     child_x, child_y - cell_height / 2, DARKGRAY);
@@ -601,7 +600,7 @@ static void btree_draw_node(BTreeNode* node, int x, int y, int dx) {
 
 static void btree_draw(void* map_ptr, int x, int y, int dx) {
     BTreeMap* map = (BTreeMap*)map_ptr;
-    if (map->root) {
+    if (map->root && map->root->n > 0) {  // ← ДОБАВЛЕНА ПРОВЕРКА
         btree_draw_node(map->root, x, y, dx);
     }
 }
