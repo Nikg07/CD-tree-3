@@ -244,7 +244,7 @@ static void bst_draw_node(BSTNode* node, int x, int y, int dx) {
     DrawCircle(x, y, 18, node_color);
     DrawCircleLines(x, y, 18, border_color);
     char key_str[16];
-    sprintf(key_str, "%s", node->value);
+    sprintf(key_str, "%d", node->key);
     int text_width = MeasureText(key_str, 18);
     DrawText(key_str, x - text_width / 2, y - 9, 18, BLACK);
 

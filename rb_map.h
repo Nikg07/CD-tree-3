@@ -3,8 +3,6 @@
 
 #include "map.h"
 
-const MapOps* get_rb_map_ops(void);
-
-void rb_draw(void* map, int x, int y, int dx);
+const TreeImpl* get_rb_tree_impl(void);
 
 #endif

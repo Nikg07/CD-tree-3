@@ -3,14 +3,14 @@
 #include "map.h"
 #include "bst_map.h"
 // #include "btree_map.h"
-// #include "rb_map.h"
+#include "rb_map.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define SCREEN_WIDTH 1900
-#define SCREEN_HEIGHT 990
+#define SCREEN_WIDTH 1512
+#define SCREEN_HEIGHT 982
 #define MAX_PATH 100
 #define MAX_TRAVERSE_LINES 1000
 
@@ -153,10 +153,10 @@ int main(void) {
     const TreeImpl* implementations[] = {
         get_bst_tree_impl(),
         // get_btree_tree_impl(),
-        // get_rb_tree_impl()
+        get_rb_tree_impl()
     };
     const char* impl_names[] = { "BST", "B-Tree", "RB-Tree" };
-    const int impl_count = 1;
+    const int impl_count = 2;
 
     int current_impl = 0;
     state.impl = implementations[current_impl];
@@ -185,10 +185,12 @@ int main(void) {
         if (state.mode == MODE_MAIN) {
             // Команды (только когда нет активного ввода)
             if (state.input_state == INPUT_IDLE) {
+                int old_impl = current_impl;
                 if (IsKeyPressed(KEY_ONE)) current_impl = 0;
                 if (IsKeyPressed(KEY_TWO) && impl_count > 1) current_impl = 1;
                 if (IsKeyPressed(KEY_THREE) && impl_count > 2) current_impl = 2;
-                if (IsKeyPressed(KEY_TAB)) {
+                if (IsKeyPressed(KEY_TAB)) current_impl = (current_impl + 1) % impl_count;
+                if (old_impl != current_impl) {
                     state.impl->ops->destroy(state.map);
                     state.impl = implementations[current_impl];
                     state.map = state.impl->ops->create();
@@ -374,14 +376,13 @@ int main(void) {
                 DrawText(state.input, (int)input_box.x + 5, (int)input_box.y + 5, 20, BLACK);
 
                 // Подсказка
-                if (state.input_state == INPUT_INSERT_KEY) {
+                if (state.input_state == INPUT_INSERT_KEY ||
+                    state.input_state == INPUT_DELETE ||
+                    state.input_state == INPUT_SEARCH) {
                     DrawText("Enter key (numbers only)", (int)input_box.x, (int)input_box.y + 35, 16, GRAY);
                 }
                 else if (state.input_state == INPUT_INSERT_VALUE) {
                     DrawText("Enter value (any characters)", (int)input_box.x, (int)input_box.y + 35, 16, GRAY);
-                }
-                else if (state.input_state == INPUT_DELETE || state.input_state == INPUT_SEARCH) {
-                    DrawText("Enter key (numbers only)", (int)input_box.x, (int)input_box.y + 35, 16, GRAY);
                 }
             }
             else {
