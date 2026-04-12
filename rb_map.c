@@ -37,7 +37,7 @@ static RBNode* rb_node_create(KeyType key, ValueType value) {
     RBNode* node = malloc(sizeof(RBNode));
     if (!node) return NULL;
     node->key = key;
-    node->value = (value) ? strdup(value) : NULL;
+    node->value = (value) ? _strdup(value) : NULL;
     node->color = NODE_RED;
     node->left = node->right = node->parent = NULL;
     return node;
@@ -230,7 +230,7 @@ static bool rb_insert(void* map_ptr, KeyType key, ValueType value) {
             current = current->right;
         else {
             map_free_value(current->value);
-            current->value = (value) ? strdup(value) : NULL;
+            current->value = (value) ? _strdup(value) : NULL;
             free(new_node);
             return true;
         }

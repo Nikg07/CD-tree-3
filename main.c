@@ -56,6 +56,8 @@ typedef struct {
     ValueType found_value;
     ProgramMode mode;
     int traverse_scroll;
+    int tree_offset_x;  
+    int tree_offset_y;  
 } AppState;
 
 static AppState state;
@@ -119,7 +121,7 @@ void draw_traverse_window(void) {
     if (g_traverse_count > max_visible) {
         float scroll_percent = (float)state.traverse_scroll / (g_traverse_count - max_visible);
         int scroll_bar_height = SCREEN_HEIGHT - 140;
-        int scroll_handle_y = 100 + (int)(scroll_percent * scroll_bar_height);
+        int scroll_handle_y = 100 + (int)(scroll_percent * (float)scroll_bar_height);  
 
         DrawRectangle(SCREEN_WIDTH - 20, 100, 10, scroll_bar_height, LIGHTGRAY);
         DrawRectangle(SCREEN_WIDTH - 20, scroll_handle_y, 10, 50, GRAY);
@@ -146,8 +148,6 @@ void draw_search_path_info(void) {
 int main(void) {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Map Visualizer (BST, B-Tree, RB-Tree)");
     SetTargetFPS(60);
-
-    // Отключаем стандартное поведение ESC (закрытие окна)
     SetExitKey(0);
 
     const TreeImpl* implementations[] = {
@@ -169,10 +169,27 @@ int main(void) {
     state.mode = MODE_MAIN;
     state.traverse_scroll = 0;
     state.input[0] = '\0';
+    state.tree_offset_x = 0;  
+    state.tree_offset_y = 0;  
 
-    Rectangle input_box = { 10, 260, 200, 30 };
+    Rectangle input_box = { 10, 240, 200, 30 };
 
     while (!WindowShouldClose()) {
+        // ========== ОБРАБОТКА ПЕРЕМЕЩЕНИЯ ДЕРЕВА (всегда, когда не ввод текста) ==========
+        if (state.mode == MODE_MAIN && !state.show_input) {
+            int move_speed = 6;
+            if (IsKeyDown(KEY_LEFT)) state.tree_offset_x += move_speed;
+            if (IsKeyDown(KEY_RIGHT)) state.tree_offset_x -= move_speed;
+            if (IsKeyDown(KEY_UP)) state.tree_offset_y += move_speed;      
+            if (IsKeyDown(KEY_DOWN)) state.tree_offset_y -= move_speed;    
+
+            // Сброс позиции по R
+            if (IsKeyPressed(KEY_R)) {
+                state.tree_offset_x = 0;
+                state.tree_offset_y = 0;
+            }
+        }
+
         // ========== ОБРАБОТКА ESC ДЛЯ ЗАКРЫТИЯ ПРОГРАММЫ ==========
         // ESC закрывает программу только в главном окне и когда нет активного ввода
         if (state.mode == MODE_MAIN && state.input_state == INPUT_IDLE) {
@@ -356,6 +373,8 @@ int main(void) {
             DrawText("D - delete", 10, 145, 20, DARKGRAY);
             DrawText("S - search", 10, 175, 20, DARKGRAY);
             DrawText("T - traverse", 10, 205, 20, DARKGRAY);
+            DrawText("Arrows - move tree", 10, 310, 20, DARKGRAY);        
+            DrawText("R - reset position", 10, 330, 20, DARKGRAY);       
             DrawText("ESC - exit (when not typing)", 10, 350, 20, DARKGRAY);
 
             // Статус операции
@@ -386,14 +405,15 @@ int main(void) {
                 }
             }
             else {
-                DrawText("Press W/D/S/T to operate", (int)input_box.x, (int)input_box.y - 30, 20, GRAY);
+                DrawText("Press W/D/S/T to operate", (int)input_box.x, (int)input_box.y - 10, 20, GRAY);
             }
 
             size_t h = state.impl->ops->height(state.map);
             DrawText(TextFormat("Height: %zu", h), SCREEN_WIDTH - 150, 10, 20, DARKGRAY);
 
-            // Отрисовка дерева
-            state.impl->draw(state.map, SCREEN_WIDTH / 2, 150, 300);
+            // Отрисовка дерева с учётом смещения  ← ИЗМЕНЕНО
+            state.impl->draw(state.map, SCREEN_WIDTH / 2 + state.tree_offset_x,
+                150 + state.tree_offset_y, 300);
 
             // Вывод результатов поиска
             if (state.search_path_len > 0) {
