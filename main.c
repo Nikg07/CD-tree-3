@@ -2,7 +2,7 @@
 #include "raylib.h"
 #include "map.h"
 #include "bst_map.h"
-// #include "btree_map.h"
+#include "btree_map.h"
 #include "rb_map.h"
 
 #include <stdio.h>
@@ -152,11 +152,11 @@ int main(void) {
 
     const TreeImpl* implementations[] = {
         get_bst_tree_impl(),
-        // get_btree_tree_impl(),
+        get_btree_tree_impl(),
         get_rb_tree_impl()
     };
     const char* impl_names[] = { "BST", "B-Tree", "RB-Tree" };
-    const int impl_count = 2;
+    const int impl_count = 3;
 
     int current_impl = 0;
     state.impl = implementations[current_impl];
