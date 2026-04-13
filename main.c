@@ -52,7 +52,8 @@ typedef enum {
 // Режимы программы
 typedef enum {
     MODE_MAIN,
-    MODE_TRAVERSE
+    MODE_TRAVERSE,
+    MODE_BENCHMARK_RESULT
 } ProgramMode;
 
 // Структура для хранения состояния одного дерева
@@ -67,9 +68,9 @@ typedef struct {
 } TreeState;
 
 typedef struct {
-    const TreeImpl* impls[3];        // реализации деревьев
-    TreeState states[3];             // состояния каждого дерева
-    int current_impl;                // текущий индекс
+    const TreeImpl* impls[3];
+    TreeState states[3];
+    int current_impl;
     char input[64];
     bool show_input;
     InputState input_state;
@@ -85,14 +86,6 @@ typedef struct {
 } AppState;
 
 static AppState state;
-
-static char* safe_strdup(const char* s) {
-    if (!s) return NULL;
-    size_t len = strlen(s) + 1;
-    char* p = malloc(len);
-    if (p) memcpy(p, s, len);
-    return p;
-}
 
 // Получить текущее дерево
 void* get_current_map(void) {
@@ -281,7 +274,7 @@ int main(void) {
     state.input[0] = '\0';
     state.notification = NOTIFY_NONE;
 
-    Rectangle input_box = { 10, 240, 200, 30 };
+    Rectangle input_box = { 10, 220, 200, 30 };
 
     while (!WindowShouldClose()) {
         TreeState* ts = &state.states[state.current_impl];
@@ -318,7 +311,6 @@ int main(void) {
                 if (IsKeyPressed(KEY_TAB)) state.current_impl = (state.current_impl + 1) % impl_count;
 
                 if (old_impl != state.current_impl) {
-                    // При переключении синхронизируем глобальный путь поиска
                     sync_search_state();
                     g_traverse_count = 0;
                 }
@@ -346,6 +338,11 @@ int main(void) {
                     state.mode = MODE_TRAVERSE;
                     state.traverse_scroll = 0;
                     reset_search_state();
+                }
+                if (IsKeyPressed(KEY_F1)) {
+                    run_benchmark_from_file("test.txt", "out.txt",
+                        state.impls, impl_names, impl_count);
+                    state.mode = MODE_BENCHMARK_RESULT;
                 }
             }
 
@@ -488,6 +485,11 @@ int main(void) {
                 if (state.traverse_scroll > max_scroll) state.traverse_scroll = max_scroll;
             }
         }
+        else if (state.mode == MODE_BENCHMARK_RESULT) {
+            if (IsKeyPressed(KEY_ENTER)) {
+                state.mode = MODE_MAIN;
+            }
+        }
 
         // ========== ОТРИСОВКА ==========
         BeginDrawing();
@@ -496,23 +498,24 @@ int main(void) {
         if (state.mode == MODE_MAIN) {
             DrawText("Map Visualizer", 10, 10, 24, DARKBLUE);
             DrawText("1-BST  2-B-Tree  3-RB-Tree  (TAB to switch)", 10, 45, 20, DARKGRAY);
-            DrawText(TextFormat("Current: %s", impl_names[state.current_impl]), 10, 80, 20, DARKGREEN);
-            DrawText("W - insert", 10, 115, 20, DARKGRAY);
+            DrawText("F1 - Run benchmark (test.txt -> out.txt)", 10, 70, 16, DARKGRAY);
+            DrawText(TextFormat("Current: %s", impl_names[state.current_impl]), 10, 100, 20, DARKGREEN);
+            DrawText("W - insert", 10, 125, 20, DARKGRAY);
             DrawText("D - delete", 10, 145, 20, DARKGRAY);
-            DrawText("S - search", 10, 175, 20, DARKGRAY);
-            DrawText("T - traverse", 10, 205, 20, DARKGRAY);
+            DrawText("S - search", 10, 165, 20, DARKGRAY);
+            DrawText("T - traverse", 10, 185, 20, DARKGRAY);
             DrawText("Arrows - move tree", 10, 310, 20, DARKGRAY);
             DrawText("R - reset position", 10, 330, 20, DARKGRAY);
             DrawText("ESC - exit (when not typing)", 10, 350, 20, DARKGRAY);
 
             if (state.input_state == INPUT_INSERT_KEY)
-                DrawText("INSERT: Enter key", 250, 115, 20, GREEN);
+                DrawText("INSERT: Enter key", 280, 135, 20, GREEN);
             else if (state.input_state == INPUT_INSERT_VALUE)
-                DrawText(TextFormat("INSERT: Enter value for key %d", state.insert_key), 250, 115, 20, GREEN);
+                DrawText(TextFormat("INSERT: Enter value for key %d", state.insert_key), 280, 135, 20, GREEN);
             else if (state.input_state == INPUT_DELETE)
-                DrawText("DELETE: Enter key", 250, 145, 20, RED);
+                DrawText("DELETE: Enter key", 280, 165, 20, RED);
             else if (state.input_state == INPUT_SEARCH)
-                DrawText("SEARCH: Enter key", 250, 175, 20, BLUE);
+                DrawText("SEARCH: Enter key", 280, 195, 20, BLUE);
 
             if (state.show_input) {
                 DrawRectangleRec(input_box, LIGHTGRAY);
@@ -547,6 +550,12 @@ int main(void) {
         }
         else if (state.mode == MODE_TRAVERSE) {
             draw_traverse_window();
+        }
+        else if (state.mode == MODE_BENCHMARK_RESULT) {
+            DrawText("BENCHMARK COMPLETED", SCREEN_WIDTH / 2 - 250, SCREEN_HEIGHT / 2 - 80, 40, DARKBLUE);
+            DrawText("Results saved to file:", SCREEN_WIDTH / 2 - 180, SCREEN_HEIGHT / 2 - 10, 30, DARKGRAY);
+            DrawText("out.txt", SCREEN_WIDTH / 2 - 60, SCREEN_HEIGHT / 2 + 30, 30, DARKGREEN);
+            DrawText("Press ENTER to return", SCREEN_WIDTH / 2 - 150, SCREEN_HEIGHT / 2 + 90, 24, GRAY);
         }
 
         EndDrawing();
