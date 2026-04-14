@@ -79,37 +79,43 @@ static ValueType btree_search_node(BTreeNode* node, KeyType key) {
 
 // Разбиение полного дочернего узла
 static void btree_split_child(BTreeNode* parent, int i, BTreeNode* child) {
-    BTreeNode* new_node = btree_node_create(child->leaf);
-    new_node->n = MIN_KEYS;
+    // child имеет MAX_KEYS ключей (5), нужно разбить на два узла
+    // Левый узел: keys[0..MIN_KEYS-1] (2 ключа)
+    // Правый узел: keys[MIN_KEYS+1..MAX_KEYS-1] (2 ключа)
+    // Средний ключ keys[MIN_KEYS] поднимается в родителя
 
-    // Копируем вторую половину ключей и значений
+    BTreeNode* new_node = btree_node_create(child->leaf);
+    new_node->n = MIN_KEYS;  // MIN_KEYS = T-1 = 2
+
+    // Копируем ПРАВУЮ половину ключей и значений в new_node
     for (int j = 0; j < MIN_KEYS; j++) {
         new_node->keys[j] = child->keys[j + T];
         new_node->values[j] = child->values[j + T];
     }
 
-    // Копируем дочерние узлы, если не лист
+    // Копируем дочерние указатели для new_node (если не лист)
     if (!child->leaf) {
         for (int j = 0; j <= MIN_KEYS; j++) {
             new_node->children[j] = child->children[j + T];
         }
     }
 
+    // Уменьшаем количество ключей в child
     child->n = MIN_KEYS;
 
-    // Сдвигаем дочерние указатели родителя
+    // Сдвигаем дочерние указатели родителя вправо
     for (int j = parent->n; j >= i + 1; j--) {
         parent->children[j + 1] = parent->children[j];
     }
     parent->children[i + 1] = new_node;
 
-    // Сдвигаем ключи родителя
+    // Сдвигаем ключи родителя вправо
     for (int j = parent->n - 1; j >= i; j--) {
         parent->keys[j + 1] = parent->keys[j];
         parent->values[j + 1] = parent->values[j];
     }
 
-    // Вставляем средний ключ в родителя
+    // Поднимаем СРЕДНИЙ ключ в родителя
     parent->keys[i] = child->keys[MIN_KEYS];
     parent->values[i] = child->values[MIN_KEYS];
     parent->n++;
@@ -155,12 +161,16 @@ static void btree_insert_nonfull(BTreeNode* node, KeyType key, ValueType value) 
 
 // Вставка в B-дерево
 static bool btree_insert(BTreeMap* map, KeyType key, ValueType value) {
+    // Если дерево пустое, создаём корень
+    if (!map->root) {
+        map->root = btree_node_create(true);
+    }
+
     BTreeNode* root = map->root;
 
     // Проверка на существование ключа
     ValueType existing = btree_search_node(root, key);
     if (existing) {
-        // Заменяем значение
         // Найдём узел с ключом и обновим
         BTreeNode* node = root;
         while (node) {
@@ -212,7 +222,6 @@ static void btree_fill(BTreeNode* node, int idx) {
         BTreeNode* child = node->children[idx];
         BTreeNode* left_sibling = node->children[idx - 1];
 
-        // Сдвиг всех ключей в child вправо
         for (int i = child->n - 1; i >= 0; i--) {
             child->keys[i + 1] = child->keys[i];
             child->values[i + 1] = child->values[i];
@@ -224,7 +233,6 @@ static void btree_fill(BTreeNode* node, int idx) {
             }
         }
 
-        // Вставка ключа из родителя
         child->keys[0] = node->keys[idx - 1];
         child->values[0] = node->values[idx - 1];
 
@@ -232,7 +240,6 @@ static void btree_fill(BTreeNode* node, int idx) {
             child->children[0] = left_sibling->children[left_sibling->n];
         }
 
-        // Обновление родителя
         node->keys[idx - 1] = left_sibling->keys[left_sibling->n - 1];
         node->values[idx - 1] = left_sibling->values[left_sibling->n - 1];
 
@@ -271,7 +278,6 @@ static void btree_fill(BTreeNode* node, int idx) {
     // Слияние с соседом
     else {
         if (idx < node->n) {
-            // Слияние с правым соседом
             BTreeNode* child = node->children[idx];
             BTreeNode* right_sibling = node->children[idx + 1];
 
@@ -300,11 +306,9 @@ static void btree_fill(BTreeNode* node, int idx) {
 
             child->n += right_sibling->n + 1;
             node->n--;
-
             free(right_sibling);
         }
         else {
-            // Слияние с левым соседом
             BTreeNode* child = node->children[idx];
             BTreeNode* left_sibling = node->children[idx - 1];
 
@@ -333,7 +337,6 @@ static void btree_fill(BTreeNode* node, int idx) {
 
             left_sibling->n += child->n + 1;
             node->n--;
-
             free(child);
         }
     }
@@ -343,11 +346,8 @@ static void btree_fill(BTreeNode* node, int idx) {
 static void btree_remove_from_node(BTreeNode* node, KeyType key) {
     int idx = btree_find_key_index(node, key);
 
-    // Случай 1: ключ в этом узле и это лист
-
     if (idx < node->n && node->keys[idx] == key) {
         if (node->leaf) {
-            // Удаляем ключ из листа
             map_free_value(node->values[idx]);
             for (int i = idx + 1; i < node->n; i++) {
                 node->keys[i - 1] = node->keys[i];
@@ -356,9 +356,7 @@ static void btree_remove_from_node(BTreeNode* node, KeyType key) {
             node->n--;
         }
         else {
-            // Случай 2: ключ во внутреннем узле
             if (node->children[idx]->n > MIN_KEYS) {
-                // Замена предшественником
                 KeyType pred = btree_get_predecessor(node, idx);
                 ValueType pred_val = btree_search_node(node->children[idx], pred);
                 node->keys[idx] = pred;
@@ -366,7 +364,6 @@ static void btree_remove_from_node(BTreeNode* node, KeyType key) {
                 btree_remove_from_node(node->children[idx], pred);
             }
             else if (node->children[idx + 1]->n > MIN_KEYS) {
-                // Замена преемником
                 KeyType succ = btree_get_successor(node, idx);
                 ValueType succ_val = btree_search_node(node->children[idx + 1], succ);
                 node->keys[idx] = succ;
@@ -374,15 +371,13 @@ static void btree_remove_from_node(BTreeNode* node, KeyType key) {
                 btree_remove_from_node(node->children[idx + 1], succ);
             }
             else {
-                // Слияние и удаление
                 btree_fill(node, idx);
                 btree_remove_from_node(node->children[idx], key);
             }
         }
     }
     else {
-        // Случай 3: ключ не в этом узле
-        if (node->leaf) return; // ключ не найден
+        if (node->leaf) return;
 
         bool is_last = (idx == node->n);
         if (node->children[idx]->n == MIN_KEYS) {
@@ -403,7 +398,6 @@ static bool btree_erase(BTreeMap* map, KeyType key) {
 
     btree_remove_from_node(map->root, key);
 
-    // Если корень стал пустым
     if (map->root->n == 0) {
         BTreeNode* old_root = map->root;
         if (map->root->leaf) {
@@ -430,8 +424,9 @@ static void btree_traverse_node(BTreeNode* node, void (*visit)(KeyType, ValueTyp
     if (!node->leaf) btree_traverse_node(node->children[i], visit);
 }
 
+// Высота дерева
 static size_t btree_height_node(BTreeNode* node) {
-    if (!node || node->n == 0) return 0;  
+    if (!node || node->n == 0) return 0;
     if (node->leaf) return 1;
     return 1 + btree_height_node(node->children[0]);
 }
@@ -439,7 +434,7 @@ static size_t btree_height_node(BTreeNode* node) {
 // ----- MapOps -----
 static void* btree_create(void) {
     BTreeMap* map = malloc(sizeof(BTreeMap));
-    map->root = btree_node_create(true);
+    map->root = NULL;
     map->size = 0;
     return map;
 }
@@ -492,34 +487,26 @@ static bool btree_find_with_path(void* map_ptr, KeyType key, KeyType* path_keys,
     *path_len = 0;
 
     while (node) {
-        // Находим индекс, где должен быть ключ
         int i = 0;
         while (i < node->n && key > node->keys[i]) {
-            // Добавляем ключи, которые МЕНЬШЕ искомого (мы проходим мимо них)
             if (*path_len < max_path) {
                 path_keys[(*path_len)++] = node->keys[i];
             }
             i++;
         }
 
-        // Проверяем, нашли ли ключ
         if (i < node->n && key == node->keys[i]) {
-            // Добавляем найденный ключ в путь
             if (*path_len < max_path) {
                 path_keys[(*path_len)++] = node->keys[i];
             }
             return true;
         }
 
-        // Добавляем ключ, с которым сравнивали (если он больше искомого)
         if (i < node->n && *path_len < max_path) {
             path_keys[(*path_len)++] = node->keys[i];
         }
 
-        // Если лист - ключ не найден
         if (node->leaf) break;
-
-        // Переходим к дочернему узлу
         node = node->children[i];
     }
     return false;
@@ -537,24 +524,26 @@ static bool is_key_in_path(KeyType key, bool* is_found) {
     return false;
 }
 
-static void btree_draw_node(BTreeNode* node, int x, int y, int dx) {
-    if (!node || node->n == 0) return;  
+// Каскадная отрисовка с чередованием направления
+static void btree_draw_node_cascade(BTreeNode* node, int x, int y, int dx, bool cascade_right) {
+    if (!node || node->n == 0) return;
 
-    int cell_width = 50;
-    int cell_height = 40;
+    int cell_width = 45;
+    int cell_height = 35;
     int node_width = node->n * cell_width;
     int start_x = x - node_width / 2;
+    int vertical_spacing = 85;
 
     // Отрисовка прямоугольника узла
     DrawRectangleLines(start_x, y - cell_height / 2, node_width, cell_height, DARKBLUE);
 
-    // Отрисовка разделительных линий между ячейками
+    // Отрисовка разделительных линий
     for (int i = 1; i < node->n; i++) {
         DrawLine(start_x + i * cell_width, y - cell_height / 2,
             start_x + i * cell_width, y + cell_height / 2, DARKBLUE);
     }
 
-    // Отрисовка ключей в ячейках
+    // Отрисовка ключей
     for (int i = 0; i < node->n; i++) {
         bool is_found = false;
         Color bg_color = LIGHTGRAY;
@@ -569,11 +558,9 @@ static void btree_draw_node(BTreeNode* node, int x, int y, int dx) {
             }
         }
 
-        // Заливка ячейки
         DrawRectangle(start_x + i * cell_width + 1, y - cell_height / 2 + 1,
             cell_width - 2, cell_height - 2, bg_color);
 
-        // Текст ключа
         char key_str[16];
         sprintf(key_str, "%d", node->keys[i]);
         int text_width = MeasureText(key_str, 16);
@@ -581,18 +568,28 @@ static void btree_draw_node(BTreeNode* node, int x, int y, int dx) {
             y - 8, 16, text_color);
     }
 
-    // Отрисовка дочерних узлов
+    // Отрисовка дочерних узлов с каскадом
     if (!node->leaf) {
-        int child_y = y + 80;
-        int total_width = (node->n + 1) * dx;
-        int child_start_x = x - total_width / 2 + dx / 2;
-
         for (int i = 0; i <= node->n; i++) {
-            if (node->children[i] && node->children[i]->n > 0) {  // ← ДОБАВЛЕНА ПРОВЕРКА
-                int child_x = child_start_x + i * dx;
+            if (node->children[i] && node->children[i]->n > 0) {
+                int child_y = y + vertical_spacing;
+                int child_x;
+
+                if (cascade_right) {
+                    child_x = x + i * dx;
+                    child_y += i * 35;
+                }
+                else {
+                    child_x = x - i * dx;
+                    child_y += i * 35;
+                }
+
+                // Линия от родителя к потомку
                 DrawLine(start_x + i * cell_width, y + cell_height / 2,
                     child_x, child_y - cell_height / 2, DARKGRAY);
-                btree_draw_node(node->children[i], child_x, child_y, dx / 2);
+
+                // Рекурсивный вызов с ПРОТИВОПОЛОЖНЫМ направлением каскада
+                btree_draw_node_cascade(node->children[i], child_x, child_y, (int)(dx / 1.4f), !cascade_right);
             }
         }
     }
@@ -600,8 +597,8 @@ static void btree_draw_node(BTreeNode* node, int x, int y, int dx) {
 
 static void btree_draw(void* map_ptr, int x, int y, int dx) {
     BTreeMap* map = (BTreeMap*)map_ptr;
-    if (map->root && map->root->n > 0) {  // ← ДОБАВЛЕНА ПРОВЕРКА
-        btree_draw_node(map->root, x, y, dx);
+    if (map->root && map->root->n > 0) {
+        btree_draw_node_cascade(map->root, x, y, dx, true);
     }
 }
 #else

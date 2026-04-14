@@ -3,35 +3,35 @@ Data size: 1394 elements (sorted)
 Remove count: 697 elements
 
 BST:
-  1. Insert time: 0.008954 seconds (avg over 20 runs)
+  1. Insert time: 0.007363 seconds (avg over 20 runs)
   4. Height before deletion: 1394
-  2. Search time: 0.002335 seconds (avg over 200 runs)
-  3. Erase time (697 elements): 0.014406 seconds (avg over 20 runs)
+  2. Search time: 0.002450 seconds (avg over 200 runs)
+  3. Erase time (697 elements): 0.012861 seconds (avg over 20 runs)
   4. Height after deletion: 697
 
 B-Tree:
-  1. Insert time: 0.000676 seconds (avg over 20 runs)
+  1. Insert time: 0.000668 seconds (avg over 20 runs)
   4. Height before deletion: 6
-  2. Search time: 0.000083 seconds (avg over 200 runs)
-  3. Erase time (697 elements): 0.000760 seconds (avg over 20 runs)
+  2. Search time: 0.000085 seconds (avg over 200 runs)
+  3. Erase time (697 elements): 0.000750 seconds (avg over 20 runs)
   4. Height after deletion: 6
 
 RB-Tree:
-  1. Insert time: 0.000698 seconds (avg over 20 runs)
+  1. Insert time: 0.000712 seconds (avg over 20 runs)
   4. Height before deletion: 18
-  2. Search time: 0.000031 seconds (avg over 200 runs)
-  3. Erase time (697 elements): 0.000757 seconds (avg over 20 runs)
+  2. Search time: 0.000030 seconds (avg over 200 runs)
+  3. Erase time (697 elements): 0.000754 seconds (avg over 20 runs)
   4. Height after deletion: 17
 
 === WINNERS ===
-Best in category 'Fastest insert': B-Tree (0.000676)
-Best in category 'Fastest search': RB-Tree (0.000031)
-Best in category 'Fastest erase': RB-Tree (0.000757)
+Best in category 'Fastest insert': B-Tree (0.000668)
+Best in category 'Fastest search': RB-Tree (0.000030)
+Best in category 'Fastest erase': B-Tree (0.000750)
 Best in category 'Lowest height': B-Tree (6.000000)
 
 === SUMMARY TABLE ===
 Tree         |    Insert(s) |    Search(s) |     Erase(s) |   Height |  H_after
 -------------|--------------|--------------|--------------|----------|----------
-BST          |     0.008954 |     0.002335 |     0.014406 |     1394 |      697
-B-Tree       |     0.000676 |     0.000083 |     0.000760 |        6 |        6
-RB-Tree      |     0.000698 |     0.000031 |     0.000757 |       18 |       17
+BST          |     0.007363 |     0.002450 |     0.012861 |     1394 |      697
+B-Tree       |     0.000668 |     0.000085 |     0.000750 |        6 |        6
+RB-Tree      |     0.000712 |     0.000030 |     0.000754 |       18 |       17
