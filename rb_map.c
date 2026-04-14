@@ -4,6 +4,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef __APPLE__
+    #define _strdup strdup
+#endif
+
 #ifdef VISUALIZATION
 #include "raylib.h"
 #define MAX_PATH_VIS 100
@@ -383,7 +387,7 @@ static void rb_draw_node(RBNode* node, int x, int y, int dx) {
 
     Color node_color = (node->color == NODE_RED) ? RED : BLACK;
     Color text_color = (node->color == NODE_RED) ? BLACK : WHITE;
-    Color border_color = (node->color == NODE_RED) ? BLACK : RED;;
+    Color border_color = (node->color == NODE_RED) ? BLACK : RED;
 
     bool is_found = false;
     if (is_key_in_path(node->key, &is_found)) {

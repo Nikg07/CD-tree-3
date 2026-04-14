@@ -215,7 +215,6 @@ static bool bst_find_with_path(void* map_ptr, KeyType key, KeyType* path_keys, i
 static bool is_key_in_path(KeyType key, bool* is_found) {
     for (int i = 0; i < g_search_path_len; i++) {
         if (g_search_path[i] == key) {
-            // Проверяем, является ли этот ключ последним в пути (найденным)
             *is_found = (i == g_search_path_len - 1) && g_search_found;
             return true;
         }
@@ -232,11 +231,11 @@ static void bst_draw_node(BSTNode* node, int x, int y, int dx) {
     bool is_found = false;
     if (is_key_in_path(node->key, &is_found)) {
         if (is_found) {
-            node_color = LIME;       // найденный узел
+            node_color = LIME;
             border_color = DARKGREEN;
         }
         else {
-            node_color = (Color){ 255, 136, 136, 255 };  // слабо-красный (путь)
+            node_color = (Color){ 255, 136, 136, 255 };
             border_color = RED;
         }
     }

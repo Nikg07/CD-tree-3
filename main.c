@@ -10,8 +10,12 @@
 #include <string.h>
 #include <time.h>
 
-#define SCREEN_WIDTH 1512
-#define SCREEN_HEIGHT 982
+#ifdef __APPLE__
+    #define _strdup strdup
+#endif
+
+#define SCREEN_WIDTH 1520
+#define SCREEN_HEIGHT 900
 #define MAX_PATH 100
 #define MAX_TRAVERSE_LINES 1000
 
